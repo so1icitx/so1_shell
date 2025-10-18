@@ -38,8 +38,8 @@ int main()
 
         if (strcspn(wd, "h") == 1)
         {
-            wd[4] = '~';
-            pwd = &(wd[4]);
+            wd[4 + strlen(username) + 1] = '~';
+            pwd = &(wd[4 + strlen(username) + 1]);
         }
         else
         {
@@ -56,6 +56,7 @@ int main()
             fprintf(stderr, "error: %s\n", strerror(errno));
             continue;
         }
+        fflush(stdin);
         if (strlen(input) <= 1)
         {
             fprintf(stderr, "error: invalid input\n");
@@ -71,7 +72,9 @@ int main()
             
             if (input[3] == '\0')
             {
-                chdir("/home");
+                char cd_home[HOSTNUSRNAME];
+                snprintf(cd_home, HOSTNUSRNAME, "/home/%s", username);
+                chdir(cd_home);
             }
             else
             {
@@ -134,4 +137,5 @@ int main()
             free(input);
         }
    }
+   
 }
