@@ -95,6 +95,65 @@ int getHistory(char direction, char* input, int* pos) {
     return *pos; 
 }
 
+void pipeLogic(int pipe_c, char* input)
+{
+    if (pipe_c == 1)
+    {
+        char* left_str, *right_str;
+        int fd[2];
+        pipe(fd);
+        left_str = strtok(input, "|");
+        right_str = strtok(NULL, "|");
+        while(*left_str == ' ')left_str++;
+        while(*right_str == ' ')right_str++;
+        int pid1 = fork();
+        if (pid1 == 0)
+        {
+            char* argv[32];
+            dup2(fd[1], STDOUT_FILENO);
+            close(fd[1]);
+            close(fd[0]);
+            char* token = strtok(left_str, " ");
+            int i = 0;
+            while (token != NULL)
+            {
+                argv[i++] = token;
+                token = strtok(NULL, " ");
+            }
+            argv[i] = NULL;
+            execvp(argv[0], argv);
+            fprintf(stderr, "error: %s\n", strerror(errno));
+            exit(1);
+        }
+        int pid2 = fork();
+        if (pid2 == 0)
+        {
+            char* argv[32];
+            dup2(fd[0], STDIN_FILENO);
+            close(fd[0]);
+            close(fd[1]);
+            char* token = strtok(right_str, " ");
+            int i = 0;
+            while (token != NULL)
+            {
+                argv[i++] = token;
+                token = strtok(NULL, " ");
+            }
+            argv[i] = NULL;
+            execvp(*argv, argv);
+            fprintf(stderr, "error: %s\n", strerror(errno));
+            exit(2);
+        }
+        if (pid1 != 0 && pid2 != 0)
+        {
+            close(fd[1]);
+            close(fd[0]);
+            wait(NULL);
+            wait(NULL);
+        }
+    }
+    return;
+}
 int main()
 {
    while(1)
@@ -134,6 +193,8 @@ int main()
         int pos = 0;
         char c;
         int esc_state = 0;
+        int pipeCount = 0;
+
         while (1)
         { 
             read(STDIN_FILENO, &c, sizeof(char));
@@ -162,6 +223,13 @@ int main()
                         input[pos] = '\0';
                         write(STDOUT_FILENO, "\b \b", 3);
                     }
+                }
+                else if(c == '|')
+                {
+                    pipeCount++;
+                    input[pos] = c;
+                    pos++;
+                    write(STDOUT_FILENO, &c, sizeof(char));
                 }
                 else
                 {
@@ -241,7 +309,12 @@ int main()
         
 
         // forking the parent process
-        int f_num = fork();
+        int f_num;
+        if (pipeCount < 1)
+        {
+            f_num = fork();
+        }
+        
 
         // if fork failed
         if (f_num < 0)
@@ -254,12 +327,22 @@ int main()
         // child process route 
         else if (f_num == 0)
         {
+            if (pipeCount >= 1)
+            {
+                continue;
+            }
+
             // parses input
             char* token = strtok(input, " \n");
+            int pipeCount = 0; 
             int i = 0;
             printf("%s", token);
             while (token != NULL)
             {
+                if(*token == '|')
+                {
+                    pipeCount++;
+                }
                 args[i] = token;
                 i++;
                 token = strtok(NULL, " \n");
@@ -275,8 +358,16 @@ int main()
 
         // parent process route
         else
-        {   
-            wait(NULL);
+        {  
+            
+            if (pipeCount >= 1)
+            {
+                pipeLogic(pipeCount, input);
+            }
+            else
+            {
+                wait(NULL);
+            }
             addHistory(input);
             free(input);
         }
