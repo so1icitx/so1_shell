@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <linux/limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -150,7 +151,94 @@ void pipeLogic(int pipe_c, char* input)
             close(fd[0]);
             wait(NULL);
             wait(NULL);
+            input[strcspn(input, "\0")] = '|';
         }
+    }
+    else{
+        int cmd_c = pipe_c + 1;
+        char* commands[cmd_c];
+        int pipes[pipe_c][2];
+        int pids[cmd_c];
+        int proccess_c = 0;
+        for(int i = 0; i < pipe_c; i++)pipe(pipes[i]);
+        char* token = strtok(input, "|");
+        int index = 0;
+        while(token != NULL){
+            while(*token == ' ')token++;
+            commands[index++] = token;
+            token = strtok(NULL, "|");
+        }
+        pids[proccess_c] = fork();
+        if (pids[proccess_c] == 0){
+            dup2(pipes[proccess_c][1], STDOUT_FILENO);
+            char* args[32];
+            for (int i = 0; i < pipe_c; i++){
+                close(pipes[i][0]);
+                close(pipes[i][1]);
+            }
+            char* token = strtok(commands[proccess_c], " ");
+            int index = 0;
+            while (token != NULL){
+                args[index++] = token;
+                token = strtok(NULL, " ");
+            }
+            args[index] = NULL;
+            execvp(args[0], args);
+        }
+        else{
+            
+            for (int i = 0; i < pipe_c - 1; i++){
+                close(pipes[proccess_c++][1]);
+                pids[proccess_c] = fork();
+                if (pids[proccess_c] == 0){
+                    dup2(pipes[proccess_c - 1][0], STDIN_FILENO);
+                    dup2(pipes[proccess_c][1], STDOUT_FILENO);
+                    char* args[32];
+                    for (int i = 0; i < pipe_c; i++){
+                        close(pipes[i][0]);
+                        close(pipes[i][1]);
+                    }
+                    char* token = strtok(commands[proccess_c], " ");
+                    int index = 0;
+                    while (token != NULL){
+                        args[index++] = token;
+                        token = strtok(NULL, " ");
+                    }
+                    args[index] = NULL;
+                    execvp(args[0], args);
+                }
+            }
+            close(pipes[proccess_c++][1]);
+            if (pids[proccess_c] == 0){
+                dup2(pipes[proccess_c - 1][0], STDIN_FILENO);
+                char* args[32];
+                for (int i = 0; i < pipe_c; i++){
+                    close(pipes[i][0]);
+                    close(pipes[i][1]);
+                }
+                char* token = strtok(commands[proccess_c], " ");
+                int index = 0;
+                while (token != NULL){
+                    args[index++] = token;
+                    token = strtok(NULL, " ");
+                }
+                args[index] = NULL;
+                execvp(args[0], args);
+
+
+            }
+            else{
+                for (int i = 0; i < pipe_c; i++){
+                    close(pipes[i][0]);
+                    close(pipes[i][1]);
+                }
+                for (int i = 0; i < cmd_c; i++){
+                    wait(NULL);
+                }
+            }
+        }
+        
+        
     }
     return;
 }
@@ -188,6 +276,8 @@ int main()
         printf("%s@%s %s> ", username, hostname, pwd);
         fflush(stdout);
         
+
+       
         // setups up line by line char interpreting
         setUpTerminal(0);
         int pos = 0;
@@ -263,6 +353,7 @@ int main()
                 }
             }
         }
+        
         setUpTerminal(1);
         fflush(stdin);
         fflush(stdout);
